@@ -1,0 +1,490 @@
+
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FireGuard | Smart Fire Monitoring</title>
+<script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+
+<style>
+*{box-sizing:border-box}
+body{
+  margin:0;background:#0b1120;color:#eef2ff;
+  font-family:Arial,Helvetica,sans-serif;
+}
+.container{max-width:1100px;margin:auto;padding:22px}
+header{
+  display:flex;align-items:center;justify-content:space-between;
+  gap:15px;flex-wrap:wrap;margin-bottom:24px
+}
+.brand{display:flex;align-items:center;gap:13px}
+.logo{
+  width:58px;height:58px;border-radius:18px;
+  background:linear-gradient(135deg,#ff7849,#e92c42);
+  display:grid;place-items:center;font-size:31px;
+  box-shadow:0 5px 25px #ff493944
+}
+h1{font-size:27px;margin:0}
+.subtitle{color:#91a0b8;font-size:13px;margin-top:6px}
+.pill{
+  display:flex;align-items:center;gap:9px;
+  background:#172238;border:1px solid #293852;
+  padding:11px 15px;border-radius:30px;font-size:13px
+}
+.dot{width:10px;height:10px;border-radius:50%;background:#f6b94a}
+.dot.online{background:#31d69a;box-shadow:0 0 12px #31d69a88}
+.dot.offline{background:#ff5964}
+.section-title{font-size:17px;margin:25px 0 14px}
+.hero{
+  padding:22px;border-radius:20px;
+  background:linear-gradient(120deg,#1c2941,#20253b);
+  border:1px solid #30405b;margin-bottom:22px
+}
+.hero-top{display:flex;justify-content:space-between;gap:15px;align-items:center}
+.hero h2{font-size:20px;margin:0 0 8px}
+.hero p{color:#aab7cc;font-size:13px;line-height:1.6;margin:0}
+.hero-icon{font-size:48px}
+.buttons{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px}
+button{
+  border:0;border-radius:10px;padding:12px 16px;
+  font-weight:bold;cursor:pointer;background:#ff634d;color:white;
+  font-size:13px
+}
+button.secondary{background:#293850;color:#eaf0ff}
+button:hover{filter:brightness(1.12)}
+button:disabled{opacity:.55;cursor:default}
+.grid{
+  display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:15px
+}
+.card{
+  background:#141e30;border:1px solid #273750;
+  border-radius:17px;padding:18px;min-width:0;
+  transition:.2s
+}
+.card:hover{transform:translateY(-3px);border-color:#536989}
+.card-head{display:flex;justify-content:space-between;align-items:center;gap:5px}
+.card-title{font-size:13px;color:#aebbd0}
+.iconbox{
+  display:grid;place-items:center;width:53px;height:53px;
+  border-radius:16px;font-size:29px;margin:18px 0 14px;
+  background:#26324a
+}
+.gas .iconbox{background:#3c3326}
+.fire .iconbox{background:#44252e}
+.buzzer .iconbox{background:#252f4c}
+.pump .iconbox{background:#1d3b3b}
+.status-label{
+  display:inline-block;padding:6px 9px;border-radius:7px;
+  font-size:12px;font-weight:bold;background:#263247;color:#b9c6d8;
+  overflow-wrap:anywhere
+}
+.status-label.normal{background:#12392f;color:#54e0ad}
+.status-label.danger{background:#48242e;color:#ff8490}
+.status-label.unknown{background:#3c3422;color:#ffd477}
+.card small{display:block;margin-top:12px;color:#7f90aa;font-size:11px}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:15px}
+.panel{
+  background:#141e30;border:1px solid #273750;
+  border-radius:17px;padding:20px;min-width:0
+}
+.panel h3{margin:0 0 12px;font-size:16px}
+.muted{color:#91a0b8;font-size:13px;line-height:1.6}
+#message{
+  font-size:12px;color:#aab7cc;line-height:1.6;
+  overflow-wrap:anywhere;margin-top:15px
+}
+.status-row{
+  display:flex;justify-content:space-between;align-items:center;
+  gap:12px;padding:12px 0;border-bottom:1px solid #29364c;font-size:13px
+}
+.status-row:last-child{border-bottom:0}
+footer{text-align:center;color:#687993;font-size:11px;padding:25px 5px;line-height:1.7}
+@media(max-width:750px){
+  .grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .two-col{grid-template-columns:1fr}
+}
+@media(max-width:420px){
+  .container{padding:14px}
+  h1{font-size:22px}
+  .card{padding:13px}
+  .hero{padding:17px}
+  .hero-icon{font-size:37px}
+  .buttons button{flex:1}
+}
+</style>
+</head>
+
+<body>
+<div class="container">
+
+<header>
+  <div class="brand">
+    <div class="logo">🔥</div>
+    <div>
+      <h1>FireGuard</h1>
+      <div class="subtitle">SMART FIRE MONITORING SYSTEM</div>
+    </div>
+  </div>
+  <div class="pill">
+    <span id="connectionDot" class="dot offline"></span>
+    <span id="connectionStatus">MQTT Terputus</span>
+  </div>
+</header>
+
+<section class="hero">
+  <div class="hero-top">
+    <div>
+      <h2>Monitoring Kebakaran</h2>
+      <p>Pantau status sensor gas, deteksi api, alarm, dan pompa melalui dashboard.</p>
+    </div>
+    <div class="hero-icon">🛡️</div>
+  </div>
+  <div class="buttons">
+    <button id="connectBtn" onclick="connectMQTT()">🔗 Hubungkan MQTT</button>
+    <button class="secondary" onclick="disconnectMQTT()">⏹ Putuskan</button>
+  </div>
+  <div id="message">Menunggu koneksi MQTT...</div>
+</section>
+
+<h2 class="section-title">📊 Status Perangkat</h2>
+<section class="grid">
+
+  <div class="card gas">
+    <div class="card-head">
+      <span class="card-title">Sensor Gas MQ-2</span>
+      <span>〰️</span>
+    </div>
+    <div class="iconbox">🌫️</div>
+    <span id="gasValue" class="status-label unknown">MENUNGGU DATA</span>
+    <small>STATUS SENSOR GAS</small>
+  </div>
+
+  <div class="card fire">
+    <div class="card-head">
+      <span class="card-title">Deteksi Api</span>
+      <span>🔥</span>
+    </div>
+    <div class="iconbox">🔥</div>
+    <span id="fireValue" class="status-label unknown">MENUNGGU DATA</span>
+    <small>STATUS SENSOR API</small>
+  </div>
+
+  <div class="card buzzer">
+    <div class="card-head">
+      <span class="card-title">Alarm Buzzer</span>
+      <span>🔔</span>
+    </div>
+    <div class="iconbox">🔊</div>
+    <span id="buzzerValue" class="status-label unknown">MENUNGGU DATA</span>
+    <small>STATUS ALARM</small>
+  </div>
+
+  <div class="card pump">
+    <div class="card-head">
+      <span class="card-title">Pompa Pemadam</span>
+      <span>💧</span>
+    </div>
+    <div class="iconbox">🚿</div>
+    <span id="pumpValue" class="status-label unknown">MENUNGGU DATA</span>
+    <small>STATUS POMPA</small>
+  </div>
+
+</section>
+
+<h2 class="section-title">⚙️ Sistem & Notifikasi</h2>
+<section class="two-col">
+
+  <div class="panel">
+    <h3>🔔 Notifikasi Browser</h3>
+    <p class="muted">Aktifkan notifikasi untuk menerima peringatan ketika data MQTT menunjukkan gas atau api terdeteksi.</p>
+    <div class="status-row">
+      <span>Izin notifikasi</span>
+      <span id="notificationStatus" class="status-label unknown">MEMERIKSA</span>
+    </div>
+    <div class="buttons">
+      <button onclick="enableNotifications()">🔔 Aktifkan</button>
+      <button class="secondary" onclick="testNotification()">🧪 Tes Notifikasi</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h3>📡 Informasi Koneksi</h3>
+    <div class="status-row">
+      <span>Status MQTT</span>
+      <strong id="mqttInfo">Terputus</strong>
+    </div>
+    <div class="status-row">
+      <span>Topic</span>
+      <strong style="font-size:11px">fireguard/demo/status</strong>
+    </div>
+    <div class="status-row">
+      <span>Data terakhir</span>
+      <strong id="lastUpdate">Belum ada</strong>
+    </div>
+    <p class="muted">Broker pengujian: broker.emqx.io</p>
+  </div>
+
+</section>
+
+<footer>
+  FIREGUARD • SMART FIRE MONITORING<br>
+  Dashboard prototipe ESP32 dan MQTT<br>
+  Gunakan hanya untuk pengujian. Bukan pengganti sistem keselamatan kebakaran tersertifikasi.
+</footer>
+
+</div>
+
+<script>
+const BROKER_URL = "wss://broker.emqx.io:8084/mqtt";
+const TOPIC = "fireguard/demo/status";
+let mqttClient = null;
+let lastAlert = "";
+
+function setConnection(online, text) {
+  document.getElementById("connectionStatus").textContent = text;
+  document.getElementById("mqttInfo").textContent = text;
+  document.getElementById("connectionDot").className =
+    online ? "dot online" : "dot offline";
+  document.getElementById("connectBtn").disabled = online;
+}
+
+function updateNotificationStatus() {
+  const el = document.getElementById("notificationStatus");
+
+  if (!("Notification" in window)) {
+    el.textContent = "TIDAK DIDUKUNG";
+    el.className = "status-label danger";
+    return;
+  }
+
+  const permission = Notification.permission;
+
+  if (permission === "granted") {
+    el.textContent = "✓ DIIZINKAN";
+    el.className = "status-label normal";
+  } else if (permission === "denied") {
+    el.textContent = "✕ DIBLOKIR";
+    el.className = "status-label danger";
+  } else {
+    el.textContent = "❗ BELUM DIIZINKAN";
+    el.className = "status-label unknown";
+  }
+}
+
+async function enableNotifications() {
+  if (!("Notification" in window)) {
+    alert("Browser tidak mendukung notifikasi.");
+    updateNotificationStatus();
+    return false;
+  }
+
+  if (Notification.permission === "granted") {
+    updateNotificationStatus();
+    alert("Notifikasi sudah diizinkan!");
+    return true;
+  }
+
+  if (Notification.permission === "denied") {
+    alert("Notifikasi diblokir. Periksa pengaturan izin Chrome.");
+    updateNotificationStatus();
+    return false;
+  }
+
+  try {
+    const permission = await Notification.requestPermission();
+    updateNotificationStatus();
+
+    if (permission === "granted") {
+      alert("Notifikasi berhasil diizinkan!");
+      return true;
+    }
+
+    alert("Izin notifikasi belum diberikan.");
+    return false;
+  } catch (error) {
+    console.error("Notification error:", error);
+    updateNotificationStatus();
+    return false;
+  }
+}
+
+async function testNotification() {
+  if (!("Notification" in window)) {
+    alert("Browser tidak mendukung notifikasi.");
+    return;
+  }
+
+  if (Notification.permission !== "granted") {
+    const allowed = await enableNotifications();
+    if (!allowed) return;
+  }
+
+  try {
+    new Notification("🔥 FireGuard - Tes", {
+      body: "Notifikasi FireGuard berhasil diuji!"
+    });
+  } catch (error) {
+    console.error("Test notification error:", error);
+    alert("Notifikasi gagal ditampilkan.");
+  }
+
+  updateNotificationStatus();
+}
+
+function readBoolean(value) {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value !== 0;
+
+  if (typeof value === "string") {
+    const v = value.toLowerCase().trim();
+
+    if (["true", "1", "on", "yes", "aktif"].includes(v)) return true;
+    if (["false", "0", "off", "no", "normal"].includes(v)) return false;
+  }
+
+  return null;
+}
+
+function updateCard(id, value, activeText, normalText) {
+  const el = document.getElementById(id);
+
+  if (value === null) {
+    el.textContent = "DATA TIDAK VALID";
+    el.className = "status-label unknown";
+    return;
+  }
+
+  el.textContent = value ? activeText : normalText;
+  el.className = "status-label " + (value ? "danger" : "normal");
+}
+
+function sendAlert(body) {
+  if (Notification.permission !== "granted") return;
+
+  try {
+    new Notification("⚠️ FireGuard - Peringatan", { body });
+  } catch (error) {
+    console.error("Alert notification error:", error);
+  }
+}
+
+function handleMessage(payload) {
+  let data;
+
+  try {
+    data = JSON.parse(payload);
+  } catch (error) {
+    document.getElementById("message").textContent =
+      "Data diterima, tetapi format JSON tidak valid.";
+    console.error(error);
+    return;
+  }
+
+  const gas = readBoolean(data.gas);
+  const fire = readBoolean(data.fire);
+  const buzzer = readBoolean(data.buzzer);
+  const pump = readBoolean(data.pump);
+
+  updateCard("gasValue", gas, "GAS TERDETEKSI", "NORMAL");
+  updateCard("fireValue", fire, "API TERDETEKSI", "AMAN");
+  updateCard("buzzerValue", buzzer, "AKTIF", "MATI");
+  updateCard("pumpValue", pump, "AKTIF", "MATI");
+
+  document.getElementById("lastUpdate").textContent =
+    new Date().toLocaleTimeString("id-ID");
+
+  document.getElementById("message").textContent =
+    "✓ Data MQTT berhasil diterima.";
+
+  if (gas === true || fire === true) {
+    const key = JSON.stringify({gas, fire});
+
+    if (key !== lastAlert) {
+      const alerts = [];
+      if (gas === true) alerts.push("Gas terdeteksi");
+      if (fire === true) alerts.push("Api terdeteksi");
+      sendAlert(alerts.join(" dan "));
+    }
+
+    lastAlert = key;
+  } else if (gas === false && fire === false) {
+    lastAlert = "";
+  }
+}
+
+function connectMQTT() {
+  if (typeof mqtt === "undefined") {
+    alert("Library MQTT belum dimuat. Periksa koneksi internet.");
+    return;
+  }
+
+  if (mqttClient && mqttClient.connected) return;
+
+  setConnection(false, "Menghubungkan...");
+
+  try {
+    mqttClient = mqtt.connect(BROKER_URL, {
+      clientId: "FireGuard_" + Math.random().toString(16).slice(2, 10),
+      clean: true,
+      connectTimeout: 10000,
+      reconnectPeriod: 3000
+    });
+
+    mqttClient.on("connect", function() {
+      setConnection(true, "Terhubung");
+      mqttClient.subscribe(TOPIC, function(error) {
+        if (error) {
+          document.getElementById("message").textContent =
+            "Gagal subscribe topic.";
+          console.error(error);
+        } else {
+          document.getElementById("message").textContent =
+            "Terhubung. Menunggu data dari MQTTX...";
+        }
+      });
+    });
+
+    mqttClient.on("message", function(topic, message) {
+      if (topic === TOPIC) handleMessage(message.toString());
+    });
+
+    mqttClient.on("reconnect", function() {
+      setConnection(false, "Menyambungkan ulang...");
+    });
+
+    mqttClient.on("offline", function() {
+      setConnection(false, "Offline");
+    });
+
+    mqttClient.on("close", function() {
+      setConnection(false, "Terputus");
+    });
+
+    mqttClient.on("error", function(error) {
+      setConnection(false, "Koneksi error");
+      console.error("MQTT error:", error);
+    });
+
+  } catch (error) {
+    setConnection(false, "Gagal terhubung");
+    console.error(error);
+  }
+}
+
+function disconnectMQTT() {
+  if (mqttClient) {
+    mqttClient.end(true);
+    mqttClient = null;
+  }
+
+  setConnection(false, "Terputus");
+  document.getElementById("message").textContent =
+    "Koneksi MQTT diputuskan.";
+}
+
+updateNotificationStatus();
+setConnection(false, "Terputus");
+</script>
+</body>
+</html>
